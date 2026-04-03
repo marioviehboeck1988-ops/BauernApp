@@ -1,0 +1,21 @@
+{
+  "name": "efko Wochenmeldung",
+  "short_name": "efko Meldung",
+  "description": "Wochenmeldung der Bauern-Lieferanten für efko Frischfrucht und Delikatessen GmbH",
+  "start_url": "./efko Wochenmeldung.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f5f5f5",
+  "theme_color": "#006838",
+  "lang": "de",
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "efko_logo_app_4k_square.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
