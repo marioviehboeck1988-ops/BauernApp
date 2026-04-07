@@ -478,7 +478,7 @@ const DAYS_KEY = ['mo','di','mi','do','fr','sa'];
 const DAYS_LABEL = ['Mo','Di','Mi','Do','Fr','Sa'];
 
 let db = null;
-let data = { adminPin:'123456', suppliers:[], products:[], assignment:{}, weeks:{} };
+let data = { adminPin:'030417', suppliers:[], products:[], assignment:{}, weeks:{} };
 let currentUser = null;
 let currentWeekKey = '';
 let editingSupplierId = null;
@@ -576,7 +576,8 @@ async function loadData() {
       const savedWeeks = val.weeks || {};
       const savedAssignment = val.assignment || {};
       // Falls alter PIN nicht 6-stellig (alte Version) → zurücksetzen auf 123456
-      const savedAdminPin = (val.adminPin && String(val.adminPin).length === 6) ? val.adminPin : '123456';
+      const rawPin = val.adminPin ? String(val.adminPin).padStart(6,'0') : '123456';
+      const savedAdminPin = rawPin.length === 6 ? rawPin : '123456';
       const oldSuppliers = val.suppliers || [];
       const oldProducts = val.products || [];
       // Always start with current defaults (neue Lieferanten & Produkte)
