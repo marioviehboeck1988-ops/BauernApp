@@ -306,7 +306,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:#4CAF50;}
     <div class="controls"><button onclick="openSupplierModal()">+ Neuer Produzent</button></div>
     <div id="suppliersAlert"></div>
     <table class="data-table">
-      <thead><tr><th>Name</th><th style="text-align:center;">PIN</th><th style="text-align:center;">Aktiv</th><th>Aktionen</th></tr></thead>
+      <thead><tr><th>Name</th><th>Telefon</th><th style="text-align:center;">PIN</th><th style="text-align:center;">Aktiv</th><th>Aktionen</th></tr></thead>
       <tbody id="suppliersList"></tbody>
     </table>
   </div>
@@ -401,6 +401,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:#4CAF50;}
     <div class="modal-title" id="supplierModalTitle">Produzent bearbeiten</div>
     <div class="modal-body">
       <div class="form-group"><label>Name</label><input type="text" id="sName"></div>
+      <div class="form-group"><label>Telefonnummer (für WhatsApp)</label><input type="tel" id="sPhone" placeholder="z.B. +436641234567" style="font-size:14px;"><small style="color:#888;font-size:12px;">Internationales Format mit + (z.B. +43664...)</small></div>
       <div class="form-group"><label><input type="checkbox" id="sActive"> Aktiv</label></div>
       <div class="form-group">
         <label>PIN (4-stellig)</label>
@@ -448,13 +449,9 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:#4CAF50;}
     <div class="modal-body">
       <p style="font-size:13px;color:#555;margin-bottom:12px;">Folgende Produzenten haben noch nicht gemeldet:</p>
       <div id="pushPendingList" style="margin-bottom:14px;"></div>
-      <textarea id="pushMsgText" rows="5" style="width:100%;font-size:13px;"></textarea>
-      <small style="color:#888;">Text bearbeiten und dann kopieren oder per WhatsApp senden.</small>
     </div>
     <div class="modal-footer">
       <button onclick="closeModal('pushModal')" class="secondary">Schließen</button>
-      <button onclick="sendWhatsApp()" style="background:#25d366;">📱 WhatsApp</button>
-      <button onclick="sendPushReminders()" style="background:#e65100;">🔔 Push senden</button>
     </div>
   </div>
 </div>
@@ -520,7 +517,9 @@ function initDefaultData() {
     {id:'s15',name:'Norz Josef',                firstName:'Josef',              active:true, pin:''},
     {id:'s16',name:'Norz Andreas',              firstName:'Andreas',            active:true, pin:''},
     {id:'s17',name:'Holler Hannes',             firstName:'Hannes',             active:true, pin:''},
-    {id:'s18',name:'Halbmayr Mario',            firstName:'Mario',              active:true, pin:''}
+    {id:'s18',name:'Halbmayr Mario',            firstName:'Mario',              active:true, pin:''},
+    {id:'s19',name:'Viehböck Mario',            firstName:'Mario',              active:true, pin:'', phone:'+436769017190'},
+    {id:'s20',name:'Schlager Rainer',            firstName:'Rainer',             active:true, pin:'', phone:'+436648160714'}
   ];
   data.products = [
     {id:'p1', name:'Bologneser',        spec:'350g+',                unit:'8 Stück',              active:true},
@@ -587,12 +586,13 @@ async function loadData() {
       data.weeks = savedWeeks;
       data.assignment = savedAssignment;
       data.adminPin = savedAdminPin;
-      // Preserve PINs + active-Status from Firebase for matching supplier IDs
+      // Preserve PINs + active-Status + Telefonnummer from Firebase for matching supplier IDs
       data.suppliers.forEach(s => {
         const old = oldSuppliers.find(o => o.id === s.id);
         if (old) {
           if (old.pin) s.pin = old.pin;
           if (old.active === false) s.active = false;
+          if (old.phone) s.phone = old.phone;
         }
       });
       // Preserve active-Status for products
@@ -1213,41 +1213,72 @@ function showPushModal() {
   const listEl = document.getElementById('pushPendingList');
   if (!pend.length) {
     listEl.innerHTML = '<p style="color:#006838;font-weight:600;">✅ Alle Produzenten haben bereits gemeldet!</p>';
-    document.getElementById('pushMsgText').value = '';
   } else {
-    listEl.innerHTML = pend.map(s=>`<span class="chip pending" style="margin:2px;">${esc(s.name)}</span>`).join(' ');
-    const names = pend.map(s => s.firstName || getFirstName(s.name)).join(', ');
-    document.getElementById('pushMsgText').value = `Liebe(r) ${names},\n\nbitte noch die Mengenmeldung für ${currentWeekKey.replace('_',' ')} eintragen.\n\nVielen Dank!\nefko Frischgemüse`;
+    const kwLabel = currentWeekKey.replace('_',' ');
+    let html = '';
+    pend.forEach(s => {
+      const firstName = s.firstName || getFirstName(s.name);
+      const hasPhone = s.phone && s.phone.trim();
+      const phoneNum = hasPhone ? s.phone.replace(/[^0-9+]/g,'').replace(/^\+/,'') : '';
+      const msg = encodeURIComponent(`Hallo ${firstName},\n\nbitte noch die Mengenmeldung für ${kwLabel} eintragen.\n\nVielen Dank!\nefko Frischgemüse`);
+      html += `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;margin-bottom:6px;background:#f9f9f9;border-radius:6px;border:1px solid #eee;">
+        <div>
+          <strong style="font-size:13px;">${esc(s.name)}</strong>
+          <span style="font-size:12px;color:#888;margin-left:6px;">${hasPhone ? esc(s.phone) : 'Keine Nr.'}</span>
+        </div>
+        ${hasPhone
+          ? `<a href="https://wa.me/${phoneNum}?text=${msg}" target="_blank" style="display:inline-block;background:#25d366;color:white;padding:6px 12px;border-radius:5px;font-size:12px;font-weight:600;text-decoration:none;">📱 WhatsApp</a>`
+          : `<span style="font-size:11px;color:#aaa;">Nr. fehlt</span>`}
+      </div>`;
+    });
+    // Button für alle nacheinander
+    const pendWithPhone = pend.filter(s => s.phone && s.phone.trim());
+    if (pendWithPhone.length > 1) {
+      html += `<button id="sendAllWABtn" onclick="startWhatsAppQueue()" style="width:100%;margin-top:10px;background:#25d366;color:white;padding:10px;border-radius:6px;font-size:14px;font-weight:700;border:none;cursor:pointer;">📱 Allen ${pendWithPhone.length} Produzenten nacheinander schreiben</button>`;
+      html += `<div id="waQueueStatus" style="display:none;margin-top:10px;padding:12px;background:#e8f5e9;border-radius:6px;text-align:center;"></div>`;
+    }
+    listEl.innerHTML = html;
   }
   document.getElementById('pushModal').classList.add('active');
 }
 
-function copyPushMsg() {
-  const txt = document.getElementById('pushMsgText').value;
-  navigator.clipboard.writeText(txt).then(() => showAlert('planningAlert','Text kopiert!','success'));
-  closeModal('pushModal');
-}
-
-function sendWhatsApp() {
-  const txt = document.getElementById('pushMsgText').value;
-  window.open('https://wa.me/?text='+encodeURIComponent(txt), '_blank');
-}
-
-function sendPushReminders() {
-  if (!currentWeekKey || !data.weeks[currentWeekKey] || !db) return;
+let waQueue=[], waIdx=0;
+function startWhatsAppQueue() {
+  if (!currentWeekKey) return;
   const week = data.weeks[currentWeekKey];
-  const subs = week.submissions || {};
-  const pending = data.suppliers.filter(s => s.active && (!subs[s.id] || !subs[s.id].submitted));
-  if (!pending.length) { showAlert('planningAlert','Alle haben bereits gemeldet!','info'); closeModal('pushModal'); return; }
-  const sentAt = new Date().toISOString();
-  const updates = {};
-  pending.forEach(s => {
-    updates['bwmData/reminders/'+s.id] = { sentAt, weekKey: currentWeekKey, shown: false };
-  });
-  db.ref().update(updates).then(() => {
-    closeModal('pushModal');
-    showAlert('planningAlert', '🔔 Push-Benachrichtigung an '+pending.length+' Produzent(en) gesendet!', 'success');
-  });
+  const subs = week.submissions||{}, wProds = week.weekProducts||{};
+  const rel = data.suppliers.filter(s=>s.active&&(wProds[s.id]||[]).length>0);
+  waQueue = rel.filter(s=>!subs[s.id]||!subs[s.id].submitted).filter(s=>s.phone&&s.phone.trim());
+  waIdx = 0;
+  document.getElementById('sendAllWABtn').style.display='none';
+  sendNextWhatsApp();
+}
+
+function sendNextWhatsApp() {
+  const statusEl = document.getElementById('waQueueStatus');
+  if (!statusEl) return;
+  statusEl.style.display='block';
+  if (waIdx >= waQueue.length) {
+    statusEl.innerHTML = '<strong style="color:#006838;">✅ Fertig! Alle '+waQueue.length+' Nachrichten gesendet.</strong>';
+    document.getElementById('sendAllWABtn').style.display='none';
+    return;
+  }
+  const s = waQueue[waIdx];
+  const firstName = s.firstName || getFirstName(s.name);
+  const kwLabel = currentWeekKey.replace('_',' ');
+  const phoneNum = s.phone.replace(/[^0-9+]/g,'').replace(/^\+/,'');
+  const msg = encodeURIComponent(`Hallo ${firstName},\n\nbitte noch die Mengenmeldung für ${kwLabel} eintragen.\n\nVielen Dank!\nefko Frischgemüse`);
+  statusEl.innerHTML = `<div style="margin-bottom:8px;font-size:13px;color:#555;">Nachricht ${waIdx+1} von ${waQueue.length}</div>
+    <strong style="font-size:15px;">${esc(s.name)}</strong>
+    <div style="margin-top:10px;">
+      <a href="https://wa.me/${phoneNum}?text=${msg}" target="_blank" onclick="setTimeout(waMessageSent,500)" style="display:inline-block;background:#25d366;color:white;padding:10px 24px;border-radius:6px;font-size:14px;font-weight:700;text-decoration:none;">📱 WhatsApp öffnen</a>
+    </div>
+    <div style="margin-top:6px;font-size:12px;color:#888;">Nach dem Senden kommst du automatisch zum Nächsten</div>`;
+}
+
+function waMessageSent() {
+  waIdx++;
+  sendNextWhatsApp();
 }
 
 // ================================================================
@@ -1260,7 +1291,9 @@ function renderSuppliers(){
     const pinDisplay = s.pin
       ? `<span class="pin-visible">${esc(s.pin)}</span>`
       : '<span style="color:#aaa;">–</span>';
+    const phoneDisplay = s.phone ? `<a href="https://wa.me/${s.phone.replace(/[^0-9]/g,'')}" target="_blank" style="color:#25d366;text-decoration:none;font-size:12px;">📱 ${esc(s.phone)}</a>` : '<span style="color:#aaa;font-size:12px;">–</span>';
     tr.innerHTML=`<td>${esc(s.name)}</td>
+      <td>${phoneDisplay}</td>
       <td style="text-align:center;">${pinDisplay}</td>
       <td style="text-align:center;"><input type="checkbox" ${s.active?'checked':''} onchange="toggleSupplier('${s.id}',this.checked)"></td>
       <td class="action-btns"><button onclick="editSupplier('${s.id}')">Bearb.</button><button onclick="delSupplier('${s.id}')" class="danger">Lösch.</button></td>`;
@@ -1273,6 +1306,7 @@ function openSupplierModal(sid=null){
   document.getElementById('supplierModalTitle').textContent=sid?'Produzent bearbeiten':'Neuer Produzent';
   const s=sid?data.suppliers.find(x=>x.id===sid):null;
   document.getElementById('sName').value=s?s.name:'';
+  document.getElementById('sPhone').value=s&&s.phone?s.phone:'';
   document.getElementById('sActive').checked=s?s.active:true;
   document.getElementById('sPin').value='';
   document.getElementById('sPin').placeholder=s&&s.pin?'(unverändert lassen)':'z.B. 1234';
@@ -1285,15 +1319,16 @@ function saveSupplier(){
   const name=document.getElementById('sName').value.trim();
   if(!name)return showAlert('suppliersAlert','Name erforderlich!','error');
   const newPin=document.getElementById('sPin').value.trim();
+  const phone=document.getElementById('sPhone').value.trim();
   if(newPin&&!/^\d{4}$/.test(newPin))return showAlert('suppliersAlert','PIN muss genau 4 Ziffern haben!','error');
   const firstName = getFirstName(name);
   if(editingSupplierId){
     const s=data.suppliers.find(x=>x.id===editingSupplierId);
-    s.name=name; s.firstName=firstName; s.active=document.getElementById('sActive').checked;
+    s.name=name; s.firstName=firstName; s.active=document.getElementById('sActive').checked; s.phone=phone;
     if(newPin)s.pin=newPin;
   } else {
     const id='s'+Math.random().toString(36).substr(2,9);
-    data.suppliers.push({id,name,firstName,active:document.getElementById('sActive').checked,pin:newPin||''});
+    data.suppliers.push({id,name,firstName,active:document.getElementById('sActive').checked,pin:newPin||'',phone});
     data.assignment[id]={};data.products.forEach(p=>{data.assignment[id][p.id]=false;});
   }
   saveData();closeModal('supplierModal');renderSuppliers();showAlert('suppliersAlert','Gespeichert!','success');
@@ -1508,9 +1543,18 @@ function renderEvaluation(){
 
 async function exportArticleXLSX(){ try{
   const k=document.getElementById('evalKW').value; if(!k)return;
+  const kwLabel=k.replace('_',' ');
   const week=data.weeks[k]||{},ss=data.suppliers.filter(s=>s.active),ps=getWeekProducts(week),wd=week.data||{};
   const wb=new ExcelJS.Workbook(); wb.creator='efko Wochenmeldung';
-  const ws=wb.addWorksheet(`Artikel ${k}`);
+  const ws=wb.addWorksheet(`Artikel ${kwLabel}`);
+  // Titelzeile mit KW
+  const titleRow=ws.addRow([`Artikelübersicht – ${kwLabel}`]);
+  ws.mergeCells(titleRow.number,1,titleRow.number,3);
+  titleRow.height=28;
+  titleRow.getCell(1).font={bold:true,name:'Arial',size:14,color:{argb:'FF006838'}};
+  titleRow.getCell(1).alignment={vertical:'middle',horizontal:'left'};
+  ws.addRow([]);
+  // Spaltenüberschriften
   const hRow=ws.addRow(['Artikel','Einheit','Gesamt']);
   hRow.height=20;
   hRow.eachCell(cell=>{
@@ -1542,17 +1586,25 @@ async function exportArticleXLSX(){ try{
   });
   const buf=await wb.xlsx.writeBuffer();
   const url=URL.createObjectURL(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
-  const a=document.createElement('a');a.href=url;a.download=`Artikel_${k}.xlsx`;document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+  const a=document.createElement('a');a.href=url;a.download=`Artikel_${kwLabel}.xlsx`;document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
 }catch(e){showAlert('planningAlert','Export-Fehler: '+e.message,'error');console.error(e);}
 }
 
 async function exportEvalXLSX(){ try{
   const k=document.getElementById('evalKW').value; if(!k)return;
+  const kwLabel=k.replace('_',' ');
   const week=data.weeks[k]||{},ss=data.suppliers.filter(s=>s.active),ps=getWeekProducts(week);
   const groups=buildGroupedData(week,ss,ps);
   const wb=new ExcelJS.Workbook(); wb.creator='efko Wochenmeldung';
-  const ws=wb.addWorksheet(`Produzenten ${k}`);
-  // Header
+  const ws=wb.addWorksheet(`Produzenten ${kwLabel}`);
+  // Titelzeile mit KW
+  const titleRow=ws.addRow([`Produzenten-Auswertung – ${kwLabel}`]);
+  ws.mergeCells(titleRow.number,1,titleRow.number,3);
+  titleRow.height=28;
+  titleRow.getCell(1).font={bold:true,name:'Arial',size:14,color:{argb:'FF006838'}};
+  titleRow.getCell(1).alignment={vertical:'middle',horizontal:'left'};
+  ws.addRow([]);
+  // Spaltenüberschriften
   const hRow=ws.addRow(['Artikelgruppe','Lieferant','Gesamt']);
   hRow.height=20;
   hRow.eachCell(cell=>{
@@ -1603,7 +1655,7 @@ async function exportEvalXLSX(){ try{
   });
   const buf=await wb.xlsx.writeBuffer();
   const url=URL.createObjectURL(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
-  const a=document.createElement('a');a.href=url;a.download=`Produzenten_${k}.xlsx`;document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+  const a=document.createElement('a');a.href=url;a.download=`Produzenten_${kwLabel}.xlsx`;document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
 }catch(e){showAlert('planningAlert','Export-Fehler: '+e.message,'error');console.error(e);}
 }
 
