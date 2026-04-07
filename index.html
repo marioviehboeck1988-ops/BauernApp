@@ -401,7 +401,8 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:#4CAF50;}
     <div class="modal-title" id="supplierModalTitle">Produzent bearbeiten</div>
     <div class="modal-body">
       <div class="form-group"><label>Name</label><input type="text" id="sName"></div>
-      <div class="form-group"><label>Telefonnummer (für WhatsApp)</label><input type="tel" id="sPhone" placeholder="z.B. +436641234567" style="font-size:14px;"><small style="color:#888;font-size:12px;">Internationales Format mit + (z.B. +43664...)</small></div>
+      <div class="form-group"><label>Telefon 1 (für WhatsApp)</label><input type="tel" id="sPhone" placeholder="z.B. +436641234567" style="font-size:14px;"><small style="color:#888;font-size:12px;">Internationales Format mit + (z.B. +43664...)</small></div>
+      <div class="form-group"><label>Telefon 2 (optional)</label><input type="tel" id="sPhone2" placeholder="z.B. +436641234567" style="font-size:14px;"><small style="color:#888;font-size:12px;">Zweite Nummer, z.B. Ehepartner</small></div>
       <div class="form-group"><label><input type="checkbox" id="sActive"> Aktiv</label></div>
       <div class="form-group">
         <label>PIN (4-stellig)</label>
@@ -517,9 +518,7 @@ function initDefaultData() {
     {id:'s15',name:'Norz Josef',                firstName:'Josef',              active:true, pin:''},
     {id:'s16',name:'Norz Andreas',              firstName:'Andreas',            active:true, pin:''},
     {id:'s17',name:'Holler Hannes',             firstName:'Hannes',             active:true, pin:''},
-    {id:'s18',name:'Halbmayr Mario',            firstName:'Mario',              active:true, pin:''},
-    {id:'s19',name:'Viehböck Mario',            firstName:'Mario',              active:true, pin:'', phone:'+436769017190'},
-    {id:'s20',name:'Schlager Rainer',            firstName:'Rainer',             active:true, pin:'', phone:'+436648160714'}
+    {id:'s18',name:'Halbmayr Mario',            firstName:'Mario',              active:true, pin:''}
   ];
   data.products = [
     {id:'p1', name:'Bologneser',        spec:'350g+',                unit:'8 Stück',              active:true},
@@ -593,6 +592,7 @@ async function loadData() {
           if (old.pin) s.pin = old.pin;
           if (old.active === false) s.active = false;
           if (old.phone) s.phone = old.phone;
+          if (old.phone2) s.phone2 = old.phone2;
         }
       });
       // Preserve active-Status for products
@@ -1219,20 +1219,20 @@ function showPushModal() {
     pend.forEach(s => {
       const firstName = s.firstName || getFirstName(s.name);
       const hasPhone = s.phone && s.phone.trim();
-      const phoneNum = hasPhone ? s.phone.replace(/[^0-9+]/g,'').replace(/^\+/,'') : '';
+      const hasPhone2 = s.phone2 && s.phone2.trim();
       const msg = encodeURIComponent(`Hallo ${firstName},\n\nbitte noch die Mengenmeldung für ${kwLabel} eintragen.\n\nVielen Dank!\nefko Frischgemüse`);
-      html += `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;margin-bottom:6px;background:#f9f9f9;border-radius:6px;border:1px solid #eee;">
-        <div>
-          <strong style="font-size:13px;">${esc(s.name)}</strong>
-          <span style="font-size:12px;color:#888;margin-left:6px;">${hasPhone ? esc(s.phone) : 'Keine Nr.'}</span>
+      const waBtn = (phone) => `<a href="https://wa.me/${phone.replace(/[^0-9+]/g,'').replace(/^\+/,'')}?text=${msg}" target="_blank" style="display:inline-block;background:#25d366;color:white;padding:6px 10px;border-radius:5px;font-size:12px;font-weight:600;text-decoration:none;margin-left:4px;">📱 ${esc(phone)}</a>`;
+      html += `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;margin-bottom:6px;background:#f9f9f9;border-radius:6px;border:1px solid #eee;flex-wrap:wrap;gap:6px;">
+        <strong style="font-size:13px;">${esc(s.name)}</strong>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center;">
+          ${hasPhone ? waBtn(s.phone) : ''}
+          ${hasPhone2 ? waBtn(s.phone2) : ''}
+          ${!hasPhone && !hasPhone2 ? '<span style="font-size:11px;color:#aaa;">Nr. fehlt</span>' : ''}
         </div>
-        ${hasPhone
-          ? `<a href="https://wa.me/${phoneNum}?text=${msg}" target="_blank" style="display:inline-block;background:#25d366;color:white;padding:6px 12px;border-radius:5px;font-size:12px;font-weight:600;text-decoration:none;">📱 WhatsApp</a>`
-          : `<span style="font-size:11px;color:#aaa;">Nr. fehlt</span>`}
       </div>`;
     });
     // Button für alle nacheinander
-    const pendWithPhone = pend.filter(s => s.phone && s.phone.trim());
+    const pendWithPhone = pend.filter(s => (s.phone && s.phone.trim()) || (s.phone2 && s.phone2.trim()));
     if (pendWithPhone.length > 1) {
       html += `<button id="sendAllWABtn" onclick="startWhatsAppQueue()" style="width:100%;margin-top:10px;background:#25d366;color:white;padding:10px;border-radius:6px;font-size:14px;font-weight:700;border:none;cursor:pointer;">📱 Allen ${pendWithPhone.length} Produzenten nacheinander schreiben</button>`;
       html += `<div id="waQueueStatus" style="display:none;margin-top:10px;padding:12px;background:#e8f5e9;border-radius:6px;text-align:center;"></div>`;
@@ -1248,7 +1248,7 @@ function startWhatsAppQueue() {
   const week = data.weeks[currentWeekKey];
   const subs = week.submissions||{}, wProds = week.weekProducts||{};
   const rel = data.suppliers.filter(s=>s.active&&(wProds[s.id]||[]).length>0);
-  waQueue = rel.filter(s=>!subs[s.id]||!subs[s.id].submitted).filter(s=>s.phone&&s.phone.trim());
+  waQueue = rel.filter(s=>!subs[s.id]||!subs[s.id].submitted).filter(s=>(s.phone&&s.phone.trim())||(s.phone2&&s.phone2.trim()));
   waIdx = 0;
   document.getElementById('sendAllWABtn').style.display='none';
   sendNextWhatsApp();
@@ -1266,13 +1266,14 @@ function sendNextWhatsApp() {
   const s = waQueue[waIdx];
   const firstName = s.firstName || getFirstName(s.name);
   const kwLabel = currentWeekKey.replace('_',' ');
-  const phoneNum = s.phone.replace(/[^0-9+]/g,'').replace(/^\+/,'');
   const msg = encodeURIComponent(`Hallo ${firstName},\n\nbitte noch die Mengenmeldung für ${kwLabel} eintragen.\n\nVielen Dank!\nefko Frischgemüse`);
+  const makeWaLink = (phone, label) => `<a href="https://wa.me/${phone.replace(/[^0-9+]/g,'').replace(/^\+/,'')}?text=${msg}" target="_blank" onclick="setTimeout(waMessageSent,500)" style="display:inline-block;background:#25d366;color:white;padding:10px 20px;border-radius:6px;font-size:14px;font-weight:700;text-decoration:none;margin:4px;">📱 ${label}</a>`;
+  let waLinks = '';
+  if (s.phone && s.phone.trim()) waLinks += makeWaLink(s.phone, s.phone2 ? 'Tel. 1: '+esc(s.phone) : 'WhatsApp öffnen');
+  if (s.phone2 && s.phone2.trim()) waLinks += makeWaLink(s.phone2, 'Tel. 2: '+esc(s.phone2));
   statusEl.innerHTML = `<div style="margin-bottom:8px;font-size:13px;color:#555;">Nachricht ${waIdx+1} von ${waQueue.length}</div>
     <strong style="font-size:15px;">${esc(s.name)}</strong>
-    <div style="margin-top:10px;">
-      <a href="https://wa.me/${phoneNum}?text=${msg}" target="_blank" onclick="setTimeout(waMessageSent,500)" style="display:inline-block;background:#25d366;color:white;padding:10px 24px;border-radius:6px;font-size:14px;font-weight:700;text-decoration:none;">📱 WhatsApp öffnen</a>
-    </div>
+    <div style="margin-top:10px;display:flex;flex-wrap:wrap;justify-content:center;">${waLinks}</div>
     <div style="margin-top:6px;font-size:12px;color:#888;">Nach dem Senden kommst du automatisch zum Nächsten</div>`;
 }
 
@@ -1291,7 +1292,8 @@ function renderSuppliers(){
     const pinDisplay = s.pin
       ? `<span class="pin-visible">${esc(s.pin)}</span>`
       : '<span style="color:#aaa;">–</span>';
-    const phoneDisplay = s.phone ? `<a href="https://wa.me/${s.phone.replace(/[^0-9]/g,'')}" target="_blank" style="color:#25d366;text-decoration:none;font-size:12px;">📱 ${esc(s.phone)}</a>` : '<span style="color:#aaa;font-size:12px;">–</span>';
+    let phoneDisplay = s.phone ? `<a href="https://wa.me/${s.phone.replace(/[^0-9]/g,'')}" target="_blank" style="color:#25d366;text-decoration:none;font-size:12px;">📱 ${esc(s.phone)}</a>` : '<span style="color:#aaa;font-size:12px;">–</span>';
+    if (s.phone2) phoneDisplay += `<br><a href="https://wa.me/${s.phone2.replace(/[^0-9]/g,'')}" target="_blank" style="color:#25d366;text-decoration:none;font-size:12px;">📱 ${esc(s.phone2)}</a>`;
     tr.innerHTML=`<td>${esc(s.name)}</td>
       <td>${phoneDisplay}</td>
       <td style="text-align:center;">${pinDisplay}</td>
@@ -1307,6 +1309,7 @@ function openSupplierModal(sid=null){
   const s=sid?data.suppliers.find(x=>x.id===sid):null;
   document.getElementById('sName').value=s?s.name:'';
   document.getElementById('sPhone').value=s&&s.phone?s.phone:'';
+  document.getElementById('sPhone2').value=s&&s.phone2?s.phone2:'';
   document.getElementById('sActive').checked=s?s.active:true;
   document.getElementById('sPin').value='';
   document.getElementById('sPin').placeholder=s&&s.pin?'(unverändert lassen)':'z.B. 1234';
@@ -1320,15 +1323,16 @@ function saveSupplier(){
   if(!name)return showAlert('suppliersAlert','Name erforderlich!','error');
   const newPin=document.getElementById('sPin').value.trim();
   const phone=document.getElementById('sPhone').value.trim();
+  const phone2=document.getElementById('sPhone2').value.trim();
   if(newPin&&!/^\d{4}$/.test(newPin))return showAlert('suppliersAlert','PIN muss genau 4 Ziffern haben!','error');
   const firstName = getFirstName(name);
   if(editingSupplierId){
     const s=data.suppliers.find(x=>x.id===editingSupplierId);
-    s.name=name; s.firstName=firstName; s.active=document.getElementById('sActive').checked; s.phone=phone;
+    s.name=name; s.firstName=firstName; s.active=document.getElementById('sActive').checked; s.phone=phone; s.phone2=phone2;
     if(newPin)s.pin=newPin;
   } else {
     const id='s'+Math.random().toString(36).substr(2,9);
-    data.suppliers.push({id,name,firstName,active:document.getElementById('sActive').checked,pin:newPin||'',phone});
+    data.suppliers.push({id,name,firstName,active:document.getElementById('sActive').checked,pin:newPin||'',phone,phone2});
     data.assignment[id]={};data.products.forEach(p=>{data.assignment[id][p.id]=false;});
   }
   saveData();closeModal('supplierModal');renderSuppliers();showAlert('suppliersAlert','Gespeichert!','success');
